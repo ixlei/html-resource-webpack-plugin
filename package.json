@@ -20,5 +20,14 @@
   "bugs": {
     "url": "https://github.com/ixlei/html-resource-webpack-plugin/issues"
   },
-  "homepage": "https://github.com/ixlei/html-resource-webpack-plugin#readme"
+  "homepage": "https://github.com/ixlei/html-resource-webpack-plugin#readme",
+  "dependencies": {
+    "html-res-loader": "0.0.1",
+    "loader-utils": "^1.1.0",
+    "object-assign": "^4.1.1"
+  },
+  "devDependencies": {
+    "html-res-loader": "0.0.1",
+    "webpack": "^4.5.0"
+  }
 }
