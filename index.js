@@ -20,9 +20,8 @@ class HtmlResourceWebpackPlugin {
         const {
             getRequestPath
         } = makeHelper(context);
-
         let makeHookCallback = (compilation, callback) => {
-            childCompiler(template, context, filename, getRequestPath(this, template))
+            childCompiler(getRequestPath(this, template), context, filename, compilation)
         }
 
         if (compiler.hooks) {
@@ -32,3 +31,5 @@ class HtmlResourceWebpackPlugin {
 
 
 }
+
+module.exports = HtmlResourceWebpackPlugin;
