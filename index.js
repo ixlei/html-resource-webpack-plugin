@@ -4,6 +4,7 @@ const path = require('path');
 const objectAssign = require('object-assign');
 const childCompiler = require('./lib/compiler');
 const makeHelper = require('./lib/makeHelper');
+const vm = require('vm');
 
 class HtmlResourceWebpackPlugin {
     constructor(options = {}) {
