@@ -63,7 +63,25 @@ class HtmlResourceWebpackPlugin {
                 self.assetJson = assetJson;
             }
 
-            console.log(assets)
+            Promise.resolve()
+                .then(() => childCompilation)
+                .then((childCompilationTemplate) => {
+                    return this.evaluateCompilationResult(compilation, childCompilationTemplate)
+                })
+                .then((html) => {
+                    return html;
+                })
+                .then((html) => {
+                    compilation.assets[self.childCompilationOutputName] = {
+                        source: () => html,
+                        size: () => html.length
+                    };
+                    callback();
+                })
+                .catch((err) => {
+                    console.log(err)
+                })
+
         }
 
         if (compiler.hooks) {
@@ -72,8 +90,34 @@ class HtmlResourceWebpackPlugin {
         }
     }
 
-    evaluateCompilationResult() {
+    /**
+     * Evaluates the child compilation result
+     * Returns a promise
+     */
+    evaluateCompilationResult(compilation, source) {
+        if (!source) {
+            return Promise.reject('The child compilation didn\'t provide a result');
+        }
 
+        // The LibraryTemplatePlugin stores the template result in a local variable.
+        // To extract the result during the evaluation this part has to be removed.
+        source = source.replace('var HTML_RESOURCE_WEBPACK_PLUGIN_RESULT =', '');
+        const template = this.options.template.replace(/^.+!/, '').replace(/\?.+$/, '');
+        const vmContext = vm.createContext(_.extend({ HTML_WEBPACK_PLUGIN: true, require: require }, global));
+        const vmScript = new vm.Script(source, { filename: template });
+        // Evaluate code and cast to string
+        let newSource;
+        try {
+            newSource = vmScript.runInContext(vmContext);
+        } catch (e) {
+            return Promise.reject(e);
+        }
+        if (typeof newSource === 'object' && newSource.__esModule && newSource.default) {
+            newSource = newSource.default;
+        }
+        return typeof newSource === 'string' || typeof newSource === 'function' ?
+            Promise.resolve(newSource) :
+            Promise.reject('The loader "' + this.options.template + '" didn\'t return html.');
     }
 
     /**
