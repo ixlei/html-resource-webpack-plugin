@@ -3,6 +3,7 @@ const HtmlResourceWebpackPlugin = require('../index');
 
 
 module.exports = {
+    //target: 'node',
     entry: {
         index: './index.js',
         //inde: './index.js'

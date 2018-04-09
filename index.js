@@ -5,7 +5,7 @@ const objectAssign = require('object-assign');
 const childCompiler = require('./lib/compiler');
 const makeHelper = require('./lib/makeHelper');
 const vm = require('vm');
-const _ = require('loadsh');
+const _ = require('lodash');
 
 class HtmlResourceWebpackPlugin {
     constructor(options = {}) {
@@ -21,13 +21,15 @@ class HtmlResourceWebpackPlugin {
         const template = this.options.template;
         const filename = this.options.filename;
         let childCompilation = null;
+        let isCompilationCached = false;
         const {
             getRequestPath
         } = makeHelper(context);
         let makeHookCallback = (compilation, callback) => {
-            childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation).catch(() => {
-
+            childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation).catch((err) => {
+                console.log(err)
             }).then((compilationResult) => {
+                isCompilationCached = compilationResult.hash && self.childCompilerHash === compilationResult.hash;
                 self.childCompilerHash = compilationResult.hash;
                 self.childCompilationOutputName = compilationResult.outputName;
                 callback();
@@ -53,16 +55,15 @@ class HtmlResourceWebpackPlugin {
             };
             const allChunks = compilation.getStats().toJson(chunkOnlyFilterConfig).chunks;
             const assets = this.getAssets(compilation, allChunks);
-
             // If the template and the assets did not change we don't have to emit the html
-            const assetJson = JSON.stringify(self.getAssetFiles(assets));
+            const assetJson = JSON.stringify(this.getAssetFiles(assets));
             if (isCompilationCached && self.options.cache && assetJson === self.assetJson) {
                 return callback();
             } else {
                 self.assetJson = assetJson;
             }
 
-
+            console.log(assets)
         }
 
         if (compiler.hooks) {
@@ -117,10 +118,10 @@ class HtmlResourceWebpackPlugin {
         };
 
         // Append a hash for cache busting
-        if (this.options.hash) {
-            assets.manifest = self.appendHash(assets.manifest, compilationHash);
-            assets.favicon = self.appendHash(assets.favicon, compilationHash);
-        }
+        // if (this.options.hash) {
+        //     assets.manifest = self.appendHash(assets.manifest, compilationHash);
+        //     assets.favicon = self.appendHash(assets.favicon, compilationHash);
+        // }
 
         for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
