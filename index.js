@@ -6,13 +6,19 @@ const childCompiler = require('./lib/compiler');
 const makeHelper = require('./lib/makeHelper');
 const vm = require('vm');
 const _ = require('lodash');
+let constants = {};
+
+function loop(val) { return val }
+let parseQuery = loop;
 
 class HtmlResourceWebpackPlugin {
     constructor(options = {}) {
         this.options = objectAssign({}, {
             template: path.resolve(__dirname, 'default-index.html'),
-            filename: 'index.html'
+            filename: 'index.html',
+            getPath: loop
         }, options);
+        this.webpackOptions = {};
     }
 
     apply(compiler) {
@@ -22,9 +28,15 @@ class HtmlResourceWebpackPlugin {
         const filename = this.options.filename;
         let childCompilation = null;
         let isCompilationCached = false;
-        const {
-            getRequestPath
-        } = makeHelper(context);
+
+        const helper = makeHelper(context);
+        const getRequestPath = helper.getRequestPath;
+        constants = helper.constants;
+        parseQuery = helper.parseQuery;
+
+        this.webpackOptions = compiler.options;
+
+
         let makeHookCallback = (compilation, callback) => {
             childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation).catch((err) => {
                 console.log(err)
@@ -53,6 +65,7 @@ class HtmlResourceWebpackPlugin {
                 timings: false,
                 version: false
             };
+            //console.log(compilation.assets['js/index.2b8afd.js'].source())
             const allChunks = compilation.getStats().toJson(chunkOnlyFilterConfig).chunks;
             const assets = this.getAssets(compilation, allChunks);
             // If the template and the assets did not change we don't have to emit the html
@@ -72,9 +85,15 @@ class HtmlResourceWebpackPlugin {
                     return html;
                 })
                 .then((html) => {
+                    let _html = this.matchRes(
+                        html,
+                        assets.chunks,
+                        assets.publicPath,
+                        compilation.assets);
+
                     compilation.assets[self.childCompilationOutputName] = {
-                        source: () => html,
-                        size: () => html.length
+                        source: () => _html,
+                        size: () => _html.length
                     };
                     callback();
                 })
@@ -133,7 +152,6 @@ class HtmlResourceWebpackPlugin {
     getAssets(compilation, chunks) {
         const self = this;
         const compilationHash = compilation.hash;
-
         // Use the configured public path or build a relative path
         let publicPath = typeof compilation.options.output.publicPath !== 'undefined'
             // If a hard coded public path exists use it
@@ -147,7 +165,6 @@ class HtmlResourceWebpackPlugin {
         if (publicPath.length && publicPath.substr(-1, 1) !== '/') {
             publicPath += '/';
         }
-
         const assets = {
             // The public path
             publicPath: publicPath,
@@ -202,6 +219,82 @@ class HtmlResourceWebpackPlugin {
         assets.css = _.uniq(assets.css);
 
         return assets;
+    }
+
+    matchRes(html, chunks, publicPath, assets) {
+        const scriptReg = /<script.*src=(?:"|')([^'"]+)(?:"|')[^>]*>[\s]*<\/script>/g;
+        const linkReg = /<link.*href=(?:"|')([^'"]+)(?:"|')[^>]*>[\s]*<\/link>/g;
+
+        html = html.replace(linkReg, (match, chunkId) => {
+            let index = chunkId.indexOf('?');
+            let entryKey = chunkId;
+            let res;
+
+            if (!!~index) {
+                entryKey = chunkId.slice(0, index);
+                let query = parseQuery(chunkId.slice(index + 1));
+                if (query['__inline'] !== undefined) {
+                    chunkId = entryKey.replace(/\.css$/, '');
+                    res = chunks[chunkId].css;
+                    let outputPath = res[0].replace(publicPath, '');
+                    return this.inlineRes(constants.STYLE, outputPath, assets);
+                }
+            }
+            chunkId = entryKey.replace(/\.css$/, '');
+
+            res = chunks[chunkId].css;
+
+            res = this.getResPath(constants.SCRIPT, res[0], chunkId);
+
+            return match.replace(new RegExp(chunkId, 'g'), res)
+        });
+
+        html = html.replace(scriptReg, (match, chunkId) => {
+            let res,
+                index = chunkId.indexOf('?'),
+                entryKey = chunkId;
+
+            if (!!~index) {
+                entryKey = chunkId.slice(0, index);
+                let query = parseQuery(chunkId.slice(index + 1));
+                if (query['__inline'] !== undefined) {
+                    chunkId = entryKey.replace(/\.js$/, '');
+                    res = chunks[chunkId].entry;
+                    let outputPath = res.replace(publicPath, '');
+                    return this.inlineRes(constants.SCRIPT, outputPath, assets);
+                }
+            }
+
+            chunkId = entryKey.replace(/\.js$/, '');
+            res = chunks[chunkId].entry;
+            res = this.getResPath(constants.SCRIPT, res, chunkId);
+
+            return match.replace(new RegExp(entryKey, 'g'), res)
+        });
+
+
+
+        return html;
+    }
+
+    inlineRes(type, outputPath, assets) {
+        if (type == constants.SCRIPT) {
+            return '<script>' +
+                assets[outputPath].source() +
+                '</script>';
+        } else if (type == constants.STYLE) {
+            let styles = assets[outputPath].children || [];
+            return '<style>' + styles.map((item) => {
+                return item.source();
+            }) + '</style>';
+        }
+    }
+
+
+    getResPath(type, entry, chunkId) {
+        if (type === constants.SCRIPT) {
+            return this.options.getPath(chunkId, entry);
+        }
     }
 
 
