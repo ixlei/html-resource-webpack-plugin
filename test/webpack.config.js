@@ -1,17 +1,18 @@
 const path = require('path');
 const HtmlResourceWebpackPlugin = require('../index');
+const ExtractTextPlugin = require('extract-text-webpack-plugin');
 
 
 module.exports = {
     //target: 'node',
     entry: {
-        index: './index.js',
+        'js/index': './index.js',
         //inde: './index.js'
     },
     output: {
         path: path.resolve(__dirname, './dist'),
-        filename: '[name].js',
-        publicPath: "./dist/"
+        filename: '[name].[chunkhash:6].js',
+        publicPath: "//s.url.cn/near-index/i/"
     },
     module: {
         rules: [{
@@ -21,6 +22,26 @@ module.exports = {
                 }],
                 exclude: /node_modules/
             },
+            {
+                test: /\.scss$/,
+                use: ExtractTextPlugin.extract({
+                    fallback: "style-loader",
+                    use: [{
+                        loader: "css-loader"
+                    }, {
+                        loader: "sass-loader",
+                        // options: {
+                        //     includePaths: [path.join(__dirname,)]
+                        // }
+                    }]
+                })
+            },
+            // ExtractTextPlugin.extract({
+            //     fallback: 'style-loader',
+            //     use: merge([], commonLoaders).concat([{
+            //         loader: 'sass-loader'
+            //     }])
+            // })
             // {
             //     test: /\.html$/,
             //     use: [{
@@ -40,12 +61,21 @@ module.exports = {
                     'url-loader?limit=10000',
                     'img-loader'
                 ]
-            }
+            },
+
         ]
     },
     plugins: [
         new HtmlResourceWebpackPlugin({
-
+            getPath(chunkId, res) {
+                return res + '?_offline=1'
+            }
+        }),
+        new ExtractTextPlugin({
+            filename: (getPath) => {
+                return getPath('css/[name].css').replace('css/js', 'css');
+            },
+            allChunks: true
         })
     ]
 }
