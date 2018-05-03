@@ -69,6 +69,10 @@ module.exports = {
         new HtmlResourceWebpackPlugin({
             getPath(chunkId, res) {
                 return res + '?_offline=1'
+            },
+            beforeHtmlEmit(chunkId, res) {
+                console.log(chunkId);
+                return res;
             }
         }),
         new ExtractTextPlugin({
