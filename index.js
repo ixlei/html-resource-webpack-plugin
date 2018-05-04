@@ -6,6 +6,7 @@ const _ = require('lodash');
 const path = require('path');
 const loaderUtils = require('loader-utils');
 const objectAssign = require('object-assign');
+const prettyError = require('./lib/error.js');
 const childCompiler = require('./lib/compiler');
 const makeHelper = require('./lib/makeHelper');
 
@@ -41,6 +42,11 @@ class HtmlResourceWebpackPlugin {
         let makeHookCallback = (compilation, callback) => {
             childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation).catch((err) => {
                 console.log(err)
+                compilation.errors.push(prettyError(err, compiler.context).toString());
+                return {
+                    content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
+                    outputName: this.options.filename
+                };
             }).then((compilationResult) => {
                 isCompilationCached = compilationResult.hash && self.childCompilerHash === compilationResult.hash;
                 self.childCompilerHash = compilationResult.hash;
@@ -68,8 +74,7 @@ class HtmlResourceWebpackPlugin {
             };
             const allChunks = compilation.getStats().toJson(chunkOnlyFilterConfig).chunks;
             const assets = this.getAssets(compilation, allChunks);
-            console.log(assets, '--')
-                // If the template and the assets did not change we don't have to emit the html
+            // If the template and the assets did not change we don't have to emit the html
             const assetJson = JSON.stringify(this.getAssetFiles(assets));
             if (isCompilationCached && self.options.cache && assetJson === self.assetJson) {
                 return callback();
@@ -99,7 +104,10 @@ class HtmlResourceWebpackPlugin {
                     callback();
                 })
                 .catch((err) => {
-                    console.log(err)
+                    compilation.errors.push(prettyError(err, compiler.context).toString());
+                    // Prevent caching
+                    this.hash = null;
+                    return this.options.showErrors ? prettyError(err, compiler.context).toHtml() : 'ERROR';
                 })
 
         }
@@ -107,6 +115,9 @@ class HtmlResourceWebpackPlugin {
         if (compiler.hooks) {
             compiler.hooks.make.tapAsync('htmlResourcePlugin', makeHookCallback);
             compiler.hooks.emit.tapAsync('htmlResourcePlugin', makeEmitHookCallback);
+        } else {
+            compiler.plugin('make', makeHookCallback);
+            compiler.plugin('emit', makeEmitHookCallback);
         }
     }
 
@@ -222,8 +233,8 @@ class HtmlResourceWebpackPlugin {
         // handle copy-webpack-plugin-x
         keys.forEach((item) => {
             let chunkName = compilation.assets[item].key;
-            if (chunkName && !assets[chunkName]) {
-                assets[chunkName] = {
+            if (chunkName && !assets.chunks[chunkName]) {
+                assets.chunks[chunkName] = {
                     entry: publicPath + item,
                     hash: compilation.assets[item].hash,
                     size: compilation.assets[item].size()
@@ -295,9 +306,8 @@ class HtmlResourceWebpackPlugin {
                     return this.inlineRes(constants.SCRIPT, outputPath, assets);
                 }
             }
-
             chunkId = entryKey.replace(/\.js$/, '');
-            res = chunks[chunkId].entry;
+            res = (chunks[chunkId] || chunks[entryKey]).entry;
             res = this.getResPath(constants.SCRIPT, res, chunkId);
 
             res = match.replace(new RegExp(entryKey, 'g'), res);
