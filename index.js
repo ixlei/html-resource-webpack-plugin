@@ -1,14 +1,17 @@
 'use strict';
 
+const vm = require('vm');
+const fs = require('fs');
+const _ = require('lodash');
 const path = require('path');
+const loaderUtils = require('loader-utils');
 const objectAssign = require('object-assign');
 const childCompiler = require('./lib/compiler');
 const makeHelper = require('./lib/makeHelper');
-const vm = require('vm');
-const _ = require('lodash');
+
 let constants = {};
 
-function loop(val) { return val }
+function loop() {}
 let parseQuery = loop;
 
 class HtmlResourceWebpackPlugin {
@@ -16,7 +19,6 @@ class HtmlResourceWebpackPlugin {
         this.options = objectAssign({}, {
             template: path.resolve(__dirname, 'default-index.html'),
             filename: 'index.html',
-            getPath: loop
         }, options);
         this.webpackOptions = {};
     }
@@ -35,7 +37,6 @@ class HtmlResourceWebpackPlugin {
         parseQuery = helper.parseQuery;
 
         this.webpackOptions = compiler.options;
-
 
         let makeHookCallback = (compilation, callback) => {
             childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation).catch((err) => {
@@ -65,10 +66,10 @@ class HtmlResourceWebpackPlugin {
                 timings: false,
                 version: false
             };
-            //console.log(compilation.assets['js/index.2b8afd.js'].source())
             const allChunks = compilation.getStats().toJson(chunkOnlyFilterConfig).chunks;
             const assets = this.getAssets(compilation, allChunks);
-            // If the template and the assets did not change we don't have to emit the html
+            console.log(assets, '--')
+                // If the template and the assets did not change we don't have to emit the html
             const assetJson = JSON.stringify(this.getAssetFiles(assets));
             if (isCompilationCached && self.options.cache && assetJson === self.assetJson) {
                 return callback();
@@ -217,15 +218,34 @@ class HtmlResourceWebpackPlugin {
         // Duplicate css assets can occur on occasion if more than one chunk
         // requires the same css.
         assets.css = _.uniq(assets.css);
-
+        let keys = Object.keys(compilation.assets);
+        // handle copy-webpack-plugin-x
+        keys.forEach((item) => {
+            let chunkName = compilation.assets[item].key;
+            if (chunkName && !assets[chunkName]) {
+                assets[chunkName] = {
+                    entry: publicPath + item,
+                    hash: compilation.assets[item].hash,
+                    size: compilation.assets[item].size()
+                }
+            }
+        })
         return assets;
     }
 
     matchRes(html, chunks, publicPath, assets) {
         const scriptReg = /<script.*src=(?:"|')([^'"]+)(?:"|')[^>]*>[\s]*<\/script>/g;
         const linkReg = /<link.*href=(?:"|')([^'"]+)(?:"|')[^>]*>[\s]*<\/link>/g;
+        const context = this.webpackOptions.context;
+        const template = this.options.template;
 
         html = html.replace(linkReg, (match, chunkId) => {
+
+            let pathDir = path.resolve(context, template, '../');
+
+            if (!loaderUtils.isUrlRequest(chunkId, pathDir)) {
+                return match;
+            }
             let index = chunkId.indexOf('?');
             let entryKey = chunkId;
             let res;
@@ -235,11 +255,15 @@ class HtmlResourceWebpackPlugin {
                 let query = parseQuery(chunkId.slice(index + 1));
                 if (query['__inline'] !== undefined) {
                     chunkId = entryKey.replace(/\.css$/, '');
-                    res = chunks[chunkId].css;
+                    res = chunkId;
+                    if (chunks[chunkId]) {
+                        res = chunks[chunkId].css;
+                    }
                     let outputPath = res[0].replace(publicPath, '');
                     return this.inlineRes(constants.STYLE, outputPath, assets);
                 }
             }
+
             chunkId = entryKey.replace(/\.css$/, '');
 
             res = chunks[chunkId].css;
@@ -253,13 +277,20 @@ class HtmlResourceWebpackPlugin {
             let res,
                 index = chunkId.indexOf('?'),
                 entryKey = chunkId;
+            let pathDir = path.resolve(context, template, '../');
 
+            if (!loaderUtils.isUrlRequest(chunkId, pathDir)) {
+                return match;
+            }
             if (!!~index) {
                 entryKey = chunkId.slice(0, index);
                 let query = parseQuery(chunkId.slice(index + 1));
                 if (query['__inline'] !== undefined) {
                     chunkId = entryKey.replace(/\.js$/, '');
-                    res = chunks[chunkId].entry;
+                    res = chunkId;
+                    if (chunks[chunkId]) {
+                        res = chunks[chunkId].entry;
+                    }
                     let outputPath = res.replace(publicPath, '');
                     return this.inlineRes(constants.SCRIPT, outputPath, assets);
                 }
@@ -269,31 +300,58 @@ class HtmlResourceWebpackPlugin {
             res = chunks[chunkId].entry;
             res = this.getResPath(constants.SCRIPT, res, chunkId);
 
-            return match.replace(new RegExp(entryKey, 'g'), res)
-        });
+            res = match.replace(new RegExp(entryKey, 'g'), res);
 
+            return res;
+        });
+        if (this.options.beforeHtmlEmit) {
+            html = this.options.beforeHtmlEmit(this.options.filename, html);
+        }
 
 
         return html;
     }
 
     inlineRes(type, outputPath, assets) {
-        if (type == constants.SCRIPT) {
-            return '<script>' +
-                assets[outputPath].source() +
-                '</script>';
-        } else if (type == constants.STYLE) {
-            let styles = assets[outputPath].children || [];
-            return '<style>' + styles.map((item) => {
-                return item.source();
-            }) + '</style>';
+        const context = this.webpackOptions.context;
+        const template = this.options.template;
+        if (!assets[outputPath]) {
+
+            let filename, filePath;
+
+            if (type == constants.SCRIPT) {
+                filename = `${outputPath}.js`;
+                filePath = path.resolve(context, template, '../', filename);
+                let content = fs.readFileSync(filePath, 'utf-8');
+                return '<script>' + content + '</script>';
+            } else if (type == constants.STYLE) {
+                filename = `${outputPath}.css`;
+                filePath = path.resolve(context, template, '../', filename);
+                let content = fs.readFileSync(filePath, 'utf-8');
+                return '<style>' + content + '</style>';
+            }
+
+        } else {
+            if (type == constants.SCRIPT) {
+                return '<script>' +
+                    assets[outputPath].source() +
+                    '</script>';
+            } else if (type == constants.STYLE) {
+                let styles = assets[outputPath].children || [];
+                return '<style>' + styles.map((item) => {
+                    return item.source();
+                }) + '</style>';
+            }
         }
+
     }
 
 
     getResPath(type, entry, chunkId) {
         if (type === constants.SCRIPT) {
-            return this.options.getPath(chunkId, entry);
+            return this.options.getPath ?
+                this.options.getPath(chunkId, entry) :
+                entry;
         }
     }
 

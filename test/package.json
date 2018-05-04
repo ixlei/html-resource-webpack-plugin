@@ -10,6 +10,9 @@
   "license": "ISC",
   "devDependencies": {
     "babel-loader": "^7.1.4",
+    "copy-webpack-plugin": "git://github.com/ixlei/copy-webpack-plugin.git#v4.5.2",
+    "copy-webpack-plugin-hash": "^6.0.0",
+    "copy-webpack-plugin-x": "^4.5.2",
     "css-loader": "^0.28.11",
     "extract-text-webpack-plugin": "^4.0.0-beta.0",
     "html-res-loader": "0.0.1",

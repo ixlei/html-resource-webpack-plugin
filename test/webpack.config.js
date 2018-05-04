@@ -1,7 +1,7 @@
 const path = require('path');
 const HtmlResourceWebpackPlugin = require('../index');
 const ExtractTextPlugin = require('extract-text-webpack-plugin');
-
+const CopyWebpackPlugin = require('copy-webpack-plugin-x');
 
 module.exports = {
     //target: 'node',
@@ -66,6 +66,16 @@ module.exports = {
         ]
     },
     plugins: [
+        new ExtractTextPlugin({
+            filename: (getPath) => {
+                return getPath('css/[name].css').replace('css/js', 'css');
+            },
+            allChunks: true
+        }),
+        new CopyWebpackPlugin([{
+            from: 'libs/',
+            to: 'libs/[name].[hash:6].[ext]'
+        }]),
         new HtmlResourceWebpackPlugin({
             getPath(chunkId, res) {
                 return res + '?_offline=1'
@@ -74,12 +84,6 @@ module.exports = {
                 console.log(chunkId);
                 return res;
             }
-        }),
-        new ExtractTextPlugin({
-            filename: (getPath) => {
-                return getPath('css/[name].css').replace('css/js', 'css');
-            },
-            allChunks: true
         })
     ]
 }
