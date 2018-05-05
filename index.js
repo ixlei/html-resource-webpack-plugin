@@ -350,7 +350,7 @@ class HtmlResourceWebpackPlugin {
                 let styles = assets[outputPath].children || [];
                 return '<style>' + styles.map((item) => {
                     return item.source();
-                }) + '</style>';
+                }).join('') + '</style>';
             }
         }
 
