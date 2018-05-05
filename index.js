@@ -129,9 +129,9 @@ class HtmlResourceWebpackPlugin {
         if (!source) {
             return Promise.reject('The child compilation didn\'t provide a result');
         }
-
-        // The LibraryTemplatePlugin stores the template result in a local variable.
-        // To extract the result during the evaluation this part has to be removed.
+        console.log(source)
+            // The LibraryTemplatePlugin stores the template result in a local variable.
+            // To extract the result during the evaluation this part has to be removed.
         source = source.replace('var HTML_RESOURCE_WEBPACK_PLUGIN_RESULT =', '');
         const template = this.options.template.replace(/^.+!/, '').replace(/\?.+$/, '');
         const vmContext = vm.createContext(_.extend({ HTML_WEBPACK_PLUGIN: true, require: require }, global));
@@ -246,7 +246,7 @@ class HtmlResourceWebpackPlugin {
 
     matchRes(html, chunks, publicPath, assets) {
         const scriptReg = /<script.*src=(?:"|')([^'"]+)(?:"|')[^>]*>[\s]*<\/script>/g;
-        const linkReg = /<link.*href=(?:"|')([^'"]+)(?:"|')[^>]*>[\s]*<\/link>/g;
+        const linkReg = /<link.*href=(?:"|')([^'"]+)(?:"|')[^\/>]*\/?>/g;
         const context = this.webpackOptions.context;
         const template = this.options.template;
 
@@ -281,7 +281,7 @@ class HtmlResourceWebpackPlugin {
 
             res = this.getResPath(constants.SCRIPT, res[0], chunkId);
 
-            return match.replace(new RegExp(chunkId, 'g'), res)
+            return match.replace(new RegExp(entryKey, 'g'), res)
         });
 
         html = html.replace(scriptReg, (match, chunkId) => {
