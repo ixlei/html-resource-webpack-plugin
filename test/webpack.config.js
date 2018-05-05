@@ -77,6 +77,8 @@ module.exports = {
             to: 'libs/[name].[hash:6].[ext]'
         }]),
         new HtmlResourceWebpackPlugin({
+            filename: 'index.html',
+            template: path.resolve(__dirname, './index.html'),
             getPath(chunkId, res) {
                 return res + '?_offline=1'
             },
