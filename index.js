@@ -41,7 +41,6 @@ class HtmlResourceWebpackPlugin {
 
         let makeHookCallback = (compilation, callback) => {
             childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation).catch((err) => {
-                console.log(err)
                 compilation.errors.push(prettyError(err, compiler.context).toString());
                 return {
                     content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
@@ -129,9 +128,8 @@ class HtmlResourceWebpackPlugin {
         if (!source) {
             return Promise.reject('The child compilation didn\'t provide a result');
         }
-        console.log(source)
-            // The LibraryTemplatePlugin stores the template result in a local variable.
-            // To extract the result during the evaluation this part has to be removed.
+        // The LibraryTemplatePlugin stores the template result in a local variable.
+        // To extract the result during the evaluation this part has to be removed.
         source = source.replace('var HTML_RESOURCE_WEBPACK_PLUGIN_RESULT =', '');
         const template = this.options.template.replace(/^.+!/, '').replace(/\?.+$/, '');
         const vmContext = vm.createContext(_.extend({ HTML_WEBPACK_PLUGIN: true, require: require }, global));
@@ -358,11 +356,11 @@ class HtmlResourceWebpackPlugin {
 
 
     getResPath(type, entry, chunkId) {
-        if (type === constants.SCRIPT) {
-            return this.options.getPath ?
-                this.options.getPath(chunkId, entry) :
-                entry;
-        }
+        //if (type === constants.SCRIPT) {
+        return this.options.getPath ?
+            this.options.getPath(chunkId, entry) :
+            entry;
+        //}
     }
 
 

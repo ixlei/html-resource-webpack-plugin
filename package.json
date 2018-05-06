@@ -1,6 +1,6 @@
 {
     "name": "html-webpack-plugin-x",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "html resource plugin for webpack",
     "main": "index.js",
     "scripts": {
