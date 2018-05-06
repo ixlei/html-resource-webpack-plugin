@@ -264,9 +264,12 @@ class HtmlResourceWebpackPlugin {
                 let query = parseQuery(chunkId.slice(index + 1));
                 if (query['__inline'] !== undefined) {
                     chunkId = entryKey.replace(/\.css$/, '');
-                    res = chunkId;
+                    res = [chunkId];
                     if (chunks[chunkId]) {
                         res = chunks[chunkId].css;
+                    }
+                    if (!Array.isArray(res) || res.length == 0) {
+                        return match;
                     }
                     let outputPath = res[0].replace(publicPath, '');
                     return this.inlineRes(constants.STYLE, outputPath, assets);
@@ -276,7 +279,9 @@ class HtmlResourceWebpackPlugin {
             chunkId = entryKey.replace(/\.css$/, '');
 
             res = chunks[chunkId].css;
-
+            if (!Array.isArray(res) || res.length == 0) {
+                return match;
+            }
             res = this.getResPath(constants.SCRIPT, res[0], chunkId);
 
             return match.replace(new RegExp(entryKey, 'g'), res)
@@ -313,7 +318,7 @@ class HtmlResourceWebpackPlugin {
             return res;
         });
         if (this.options.beforeHtmlEmit) {
-            html = this.options.beforeHtmlEmit(this.options.filename, html);
+            html = this.options.beforeHtmlEmit(this.options.filename, html, chunks);
         }
 
 
