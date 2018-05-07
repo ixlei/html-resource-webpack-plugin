@@ -9,6 +9,7 @@ const objectAssign = require('object-assign');
 const prettyError = require('./lib/error.js');
 const childCompiler = require('./lib/compiler');
 const makeHelper = require('./lib/makeHelper');
+const resolveFrom = require('resolve-from');
 
 let constants = {};
 
@@ -22,6 +23,7 @@ class HtmlResourceWebpackPlugin {
             filename: 'index.html',
         }, options);
         this.webpackOptions = {};
+        console.log('0000')
     }
 
     apply(compiler) {
@@ -272,7 +274,7 @@ class HtmlResourceWebpackPlugin {
                         return match;
                     }
                     let outputPath = res[0].replace(publicPath, '');
-                    return this.inlineRes(constants.STYLE, outputPath, assets);
+                    return this.inlineRes(constants.STYLE, outputPath, assets, entryKey);
                 }
             }
 
@@ -331,16 +333,12 @@ class HtmlResourceWebpackPlugin {
         if (!assets[outputPath]) {
 
             let filename, filePath;
-
+            filename = entryKey;
+            filePath = resolveFrom(path.resolve(context, template, '../'), filename);
+            let content = fs.readFileSync(filePath, 'utf-8');
             if (type == constants.SCRIPT) {
-                filename = `${outputPath}.js`;
-                filePath = path.resolve(context, template, '../', filename);
-                let content = fs.readFileSync(filePath, 'utf-8');
                 return '<script>' + content + '</script>';
             } else if (type == constants.STYLE) {
-                filename = `${outputPath}.css`;
-                filePath = path.resolve(context, template, '../', filename);
-                let content = fs.readFileSync(filePath, 'utf-8');
                 return '<style>' + content + '</style>';
             }
 
