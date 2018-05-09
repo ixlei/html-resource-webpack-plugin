@@ -308,7 +308,7 @@ class HtmlResourceWebpackPlugin {
                         res = chunks[chunkId].entry;
                     }
                     let outputPath = res.replace(publicPath, '');
-                    return this.inlineRes(constants.SCRIPT, outputPath, assets);
+                    return this.inlineRes(constants.SCRIPT, outputPath, assets, entryKey);
                 }
             }
             chunkId = entryKey.replace(/\.js$/, '');
@@ -331,7 +331,7 @@ class HtmlResourceWebpackPlugin {
         return html;
     }
 
-    inlineRes(type, outputPath, assets) {
+    inlineRes(type, outputPath, assets, entryKey) {
         const context = this.webpackOptions.context;
         const template = this.options.template;
         if (!assets[outputPath]) {
