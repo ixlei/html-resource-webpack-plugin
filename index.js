@@ -23,7 +23,6 @@ class HtmlResourceWebpackPlugin {
             filename: 'index.html',
         }, options);
         this.webpackOptions = {};
-        console.log('0000')
     }
 
     apply(compiler) {
