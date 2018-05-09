@@ -312,7 +312,11 @@ class HtmlResourceWebpackPlugin {
                 }
             }
             chunkId = entryKey.replace(/\.js$/, '');
-            res = (chunks[chunkId] || chunks[entryKey]).entry;
+            res = (chunks[chunkId] || chunks[entryKey]);
+            if (!res) {
+                return match;
+            }
+            res = res.entry;
             res = this.getResPath(constants.SCRIPT, res, chunkId);
 
             res = match.replace(new RegExp(entryKey, 'g'), res);
