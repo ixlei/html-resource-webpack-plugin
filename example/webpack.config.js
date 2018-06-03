@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlResourceWebpackPlugin = require('../index');
 const ExtractTextPlugin = require('extract-text-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin-x');
@@ -21,21 +22,22 @@ module.exports = {
                     loader: 'babel-loader'
                 }],
                 exclude: /node_modules/
-            },
-            {
-                test: /\.scss$/,
-                use: ExtractTextPlugin.extract({
-                    fallback: "style-loader",
-                    use: [{
-                        loader: "css-loader"
-                    }, {
-                        loader: "sass-loader",
-                        // options: {
-                        //     includePaths: [path.join(__dirname,)]
-                        // }
-                    }]
-                })
-            },
+            }
+            // ,
+            // {
+            //     test: /\.scss$/,
+            //     use: ExtractTextPlugin.extract({
+            //         fallback: "style-loader",
+            //         use: [{
+            //             loader: "css-loader"
+            //         }, {
+            //             loader: "sass-loader",
+            //             // options: {
+            //             //     includePaths: [path.join(__dirname,)]
+            //             // }
+            //         }]
+            //     })
+            // },
             // ExtractTextPlugin.extract({
             //     fallback: 'style-loader',
             //     use: merge([], commonLoaders).concat([{
@@ -55,7 +57,7 @@ module.exports = {
             //         //     }
             //         // }]
             // },
-            {
+            , {
                 test: /\.(jpe?g|png|gif|svg)$/i,
                 use: [
                     'url-loader?limit=10000',
@@ -66,18 +68,20 @@ module.exports = {
         ]
     },
     plugins: [
-        new ExtractTextPlugin({
-            filename: (getPath) => {
-                return getPath('css/[name].css').replace('css/js', 'css');
-            },
-            allChunks: true
-        }),
-        new CopyWebpackPlugin([{
-            from: 'libs/',
-            to: 'libs/[name].[hash:6].[ext]'
-        }]),
+        // new ExtractTextPlugin({
+        //     filename: (getPath) => {
+        //         return getPath('css/[name].css').replace('css/js', 'css');
+        //     },
+        //     allChunks: true
+        // }),
+        //new webpack.optimize.ModuleConcatenationPlugin(),
+        // new CopyWebpackPlugin([{
+        //     from: 'libs/',
+        //     to: 'libs/[name].[hash:6].[ext]'
+        // }]),
         new HtmlResourceWebpackPlugin({
             filename: 'index.html',
+            script: path.resolve(__dirname, './index.js'),
             template: path.resolve(__dirname, './index.html'),
             getPath(chunkId, res) {
                 return res + '?_offline=1'

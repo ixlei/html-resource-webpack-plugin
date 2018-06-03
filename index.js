@@ -9,9 +9,11 @@ const objectAssign = require('object-assign');
 const prettyError = require('./lib/error.js');
 const childCompiler = require('./lib/compiler');
 const makeHelper = require('./lib/makeHelper');
+const parser = require('./lib/parser');
+
 const resolveFrom = require('resolve-from');
 
-let constants = {};
+let constants = require('./lib/constants');
 
 function loop() {}
 let parseQuery = loop;
@@ -21,27 +23,58 @@ class HtmlResourceWebpackPlugin {
         this.options = objectAssign({}, {
             template: path.resolve(__dirname, 'default-index.html'),
             filename: 'index.html',
+            reqAttr: ['script:data-src']
         }, options);
         this.webpackOptions = {};
+        this.reqList = this.getReqList();
     }
+
+
+    getReqList() {
+        const reqAttr = this.options.reqAttr;
+        const template = this.options.template;
+
+        let content = fs.readFileSync(template, 'utf-8');
+
+        function isNeedRequire(tag, name, _defaultTag = reqAttr) {
+            return _defaultTag.some((item) => {
+                return `${tag}:${name}` == item.trim();
+            });
+        }
+
+        const res = attrParser(content, function(type, tag, name) {
+            if (type == constants.ATTR) {
+                return isNeedRequire(tag, name);
+            }
+            return !!~defaultTag.indexOf(tag);
+        });
+        return res;
+    }
+
 
     apply(compiler) {
         const self = this;
         const context = compiler.context;
         const template = this.options.template;
+        const script = this.options.script;
+
         const filename = this.options.filename;
         let childCompilation = null;
+        let webChildCompilation = null;
+
         let isCompilationCached = false;
 
         const helper = makeHelper(context);
         const getRequestPath = helper.getRequestPath;
-        constants = helper.constants;
+        const getScriptRequire = helper.getScriptRequire;
+
+        constants = Object.assign({}, constants, helper.constants);
         parseQuery = helper.parseQuery;
 
         this.webpackOptions = compiler.options;
 
         let makeHookCallback = (compilation, callback) => {
-            childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation).catch((err) => {
+            childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation, 'node').catch((err) => {
                 compilation.errors.push(prettyError(err, compiler.context).toString());
                 return {
                     content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
@@ -52,6 +85,24 @@ class HtmlResourceWebpackPlugin {
                 self.childCompilerHash = compilationResult.hash;
                 self.childCompilationOutputName = compilationResult.outputName;
                 callback();
+                return compilationResult.content;
+            })
+
+        }
+
+        let webMakeHookCallback = (compilation, callback) => {
+            webChildCompilation = childCompiler(getScriptRequire(this, script), context, 'jsjs', compilation, 'web').catch((err) => {
+                compilation.errors.push(prettyError(err, compiler.context).toString());
+                return {
+                    content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
+                    outputName: this.options.filename
+                };
+            }).then((compilationResult) => {
+                // isCompilationCached = compilationResult.hash && self.childCompilerHash === compilationResult.hash;
+                // self.childCompilerHash = compilationResult.hash;
+                // self.childCompilationOutputName = compilationResult.outputName;
+                callback();
+                console.log(compilationResult.content)
                 return compilationResult.content;
             })
         }
@@ -114,6 +165,7 @@ class HtmlResourceWebpackPlugin {
 
         if (compiler.hooks) {
             compiler.hooks.make.tapAsync('htmlResourcePlugin', makeHookCallback);
+            compiler.hooks.make.tapAsync('hemlResourceScriptPlugin', webMakeHookCallback);
             compiler.hooks.emit.tapAsync('htmlResourcePlugin', makeEmitHookCallback);
         } else {
             compiler.plugin('make', makeHookCallback);
