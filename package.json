@@ -24,6 +24,7 @@
   "dependencies": {
     "babel-core": "^6.26.3",
     "babel-loader": "^7.1.4",
+    "enhanced-resolve": "^4.0.0",
     "fastparse": "^1.1.1",
     "html-res-loader": "0.0.2",
     "loader-utils": "^1.1.0",

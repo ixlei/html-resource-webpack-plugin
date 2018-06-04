@@ -10,6 +10,7 @@ const prettyError = require('./lib/error.js');
 const childCompiler = require('./lib/compiler');
 const makeHelper = require('./lib/makeHelper');
 const parser = require('./lib/parser');
+const RequireHelper = require('./lib/requireHelper');
 
 const resolveFrom = require('resolve-from');
 
