@@ -28,6 +28,7 @@ class HtmlResourceWebpackPlugin {
         }, options);
         this.webpackOptions = {};
         this.reqList = this.getReqList();
+        this.resolver = null;
     }
 
 
@@ -52,6 +53,18 @@ class HtmlResourceWebpackPlugin {
         return res;
     }
 
+    initResolver() {
+        const webpackOptions = this.webpackOptions;
+        let resolveParams = RequireHelper.getResolveConfig(webpackOptions);
+        this.resolver = new RequireHelper(resolveParams);
+    }
+
+    getDependenceResolver(lookupStartPath) {
+        return this.reqList.map((item) => {
+            return this.resolver.getPath(lookupStartPath, item)
+        });
+    }
+
 
     apply(compiler) {
         const self = this;
@@ -63,6 +76,8 @@ class HtmlResourceWebpackPlugin {
         let childCompilation = null;
         let webChildCompilation = null;
 
+        let webChildCompilationList = [];
+
         let isCompilationCached = false;
 
         const helper = makeHelper(context);
@@ -73,6 +88,8 @@ class HtmlResourceWebpackPlugin {
         parseQuery = helper.parseQuery;
 
         this.webpackOptions = compiler.options;
+
+        this.initResolver();
 
         let makeHookCallback = (compilation, callback) => {
             childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation, 'node').catch((err) => {
@@ -91,21 +108,23 @@ class HtmlResourceWebpackPlugin {
 
         }
 
-        let webMakeHookCallback = (compilation, callback) => {
-            webChildCompilation = childCompiler(getScriptRequire(this, script), context, 'jsjs', compilation, 'web').catch((err) => {
-                compilation.errors.push(prettyError(err, compiler.context).toString());
-                return {
-                    content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
-                    outputName: this.options.filename
-                };
-            }).then((compilationResult) => {
-                // isCompilationCached = compilationResult.hash && self.childCompilerHash === compilationResult.hash;
-                // self.childCompilerHash = compilationResult.hash;
-                // self.childCompilationOutputName = compilationResult.outputName;
-                callback();
-                console.log(compilationResult.content)
-                return compilationResult.content;
-            })
+        function getDependenceHookCallback(request, filename) {
+            return (compilation, callback) => {
+                webChildCompilationList.push(childCompiler(getScriptRequire(this, request), context, filename, compilation, 'web').catch((err) => {
+                    compilation.errors.push(prettyError(err, compiler.context).toString());
+                    return {
+                        content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
+                        outputName: filename
+                    };
+                }).then((compilationResult) => {
+                    // isCompilationCached = compilationResult.hash && self.childCompilerHash === compilationResult.hash;
+                    // self.childCompilerHash = compilationResult.hash;
+                    // self.childCompilationOutputName = compilationResult.outputName;
+                    callback();
+                    console.log(compilationResult.content)
+                    return compilationResult.content;
+                }));
+            }
         }
 
         let makeEmitHookCallback = (compilation, callback) => {
@@ -166,7 +185,8 @@ class HtmlResourceWebpackPlugin {
 
         if (compiler.hooks) {
             compiler.hooks.make.tapAsync('htmlResourcePlugin', makeHookCallback);
-            compiler.hooks.make.tapAsync('hemlResourceScriptPlugin', webMakeHookCallback);
+            //compiler.hooks.make.tapAsync('hemlResourceScriptPlugin', webMakeHookCallback);
+
             compiler.hooks.emit.tapAsync('htmlResourcePlugin', makeEmitHookCallback);
         } else {
             compiler.plugin('make', makeHookCallback);
