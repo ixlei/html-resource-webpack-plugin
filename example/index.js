@@ -6,7 +6,7 @@ function i() {
 
 i();
 
-export default function() {
-    console.log({ name: 'dsds' });
+// export default function() {
+//     console.log({ name: 'dsds' });
 
-}
+// }
