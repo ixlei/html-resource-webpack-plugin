@@ -29,6 +29,7 @@ class HtmlResourceWebpackPlugin {
         this.webpackOptions = {};
         this.reqList = this.getReqList();
         this.resolver = null;
+
     }
 
 
@@ -44,11 +45,11 @@ class HtmlResourceWebpackPlugin {
             });
         }
 
-        const res = attrParser(content, function(type, tag, name) {
+        const res = parser(content, function(type, tag, name) {
             if (type == constants.ATTR) {
                 return isNeedRequire(tag, name);
             }
-            return !!~defaultTag.indexOf(tag);
+            return !!~reqAttr.indexOf(tag);
         });
         return res;
     }
@@ -61,7 +62,7 @@ class HtmlResourceWebpackPlugin {
 
     getDependenceResolver(lookupStartPath) {
         return this.reqList.map((item) => {
-            return this.resolver.getPath(lookupStartPath, item)
+            return this.resolver.getPath(lookupStartPath, item.value)
         });
     }
 
@@ -91,6 +92,9 @@ class HtmlResourceWebpackPlugin {
 
         this.initResolver();
 
+        let lookupStartPath = path.dirname(template);
+        this.resolverList = this.getDependenceResolver(lookupStartPath);
+
         let makeHookCallback = (compilation, callback) => {
             childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation, 'node').catch((err) => {
                 compilation.errors.push(prettyError(err, compiler.context).toString());
@@ -108,20 +112,16 @@ class HtmlResourceWebpackPlugin {
 
         }
 
-        function getDependenceHookCallback(request, filename) {
+        const getDependenceHookCallback = (request, filename) => {
             return (compilation, callback) => {
-                webChildCompilationList.push(childCompiler(getScriptRequire(this, request), context, filename, compilation, 'web').catch((err) => {
+                webChildCompilationList.push(childCompiler(getScriptRequire(this, request), context, 'filename', compilation, 'web').catch((err) => {
                     compilation.errors.push(prettyError(err, compiler.context).toString());
                     return {
                         content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
-                        outputName: filename
+                        outputName: 'filename'
                     };
                 }).then((compilationResult) => {
-                    // isCompilationCached = compilationResult.hash && self.childCompilerHash === compilationResult.hash;
-                    // self.childCompilerHash = compilationResult.hash;
-                    // self.childCompilationOutputName = compilationResult.outputName;
                     callback();
-                    console.log(compilationResult.content)
                     return compilationResult.content;
                 }));
             }
@@ -152,7 +152,12 @@ class HtmlResourceWebpackPlugin {
             } else {
                 self.assetJson = assetJson;
             }
-
+            Promise.all([].concat(childCompilation, webChildCompilationList)).then((values) => {
+                //console.log(values, 'values');
+                console.log(webChildCompilationList.length)
+            }).catch((err) => {
+                console.log(err)
+            })
             Promise.resolve()
                 .then(() => childCompilation)
                 .then((childCompilationTemplate) => {
@@ -186,7 +191,10 @@ class HtmlResourceWebpackPlugin {
         if (compiler.hooks) {
             compiler.hooks.make.tapAsync('htmlResourcePlugin', makeHookCallback);
             //compiler.hooks.make.tapAsync('hemlResourceScriptPlugin', webMakeHookCallback);
-
+            this.resolverList.forEach((item, index) => {
+                compiler.hooks.make.tapAsync(`scriptHtmlResourcePlugin${index}`,
+                    getDependenceHookCallback(getScriptRequire(this, item), item))
+            })
             compiler.hooks.emit.tapAsync('htmlResourcePlugin', makeEmitHookCallback);
         } else {
             compiler.plugin('make', makeHookCallback);
