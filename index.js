@@ -32,12 +32,11 @@ class HtmlResourceWebpackPlugin {
 
     }
 
-
     getReqList() {
         const reqAttr = this.options.reqAttr;
         const template = this.options.template;
 
-        let content = fs.readFileSync(template, 'utf-8');
+        this.content = fs.readFileSync(template, 'utf-8');
 
         function isNeedRequire(tag, name, _defaultTag = reqAttr) {
             return _defaultTag.some((item) => {
@@ -45,7 +44,7 @@ class HtmlResourceWebpackPlugin {
             });
         }
 
-        const res = parser(content, function(type, tag, name) {
+        const res = parser(this.content, function(type, tag, name) {
             if (type == constants.ATTR) {
                 return isNeedRequire(tag, name);
             }
@@ -59,6 +58,7 @@ class HtmlResourceWebpackPlugin {
         let resolveParams = RequireHelper.getResolveConfig(webpackOptions);
         this.resolver = new RequireHelper(resolveParams);
     }
+
 
     getDependenceResolver(lookupStartPath) {
         return this.reqList.map((item) => {
@@ -76,7 +76,7 @@ class HtmlResourceWebpackPlugin {
         const script = this.options.script;
 
         const filename = this.options.filename;
-        const basename = path.basename(filename, '.html');
+        const basename = path.basename(filename, path.extname(filename));
 
         let childCompilation = null;
         let webChildCompilation = null;
@@ -88,6 +88,7 @@ class HtmlResourceWebpackPlugin {
         const helper = makeHelper(context);
         const getRequestPath = helper.getRequestPath;
         const getScriptRequire = helper.getScriptRequire;
+        const getOutnameFromPath = helper.getOutnameFromPath;
 
         constants = Object.assign({}, constants, helper.constants);
         parseQuery = helper.parseQuery;
@@ -117,8 +118,9 @@ class HtmlResourceWebpackPlugin {
         }
 
         const getDependenceHookCallback = (request, filename) => {
+            filename = getOutnameFromPath(filename);
             return (compilation, callback) => {
-                webChildCompilationList.push(childCompiler(getScriptRequire(this, request), context, 'filename', compilation, 'web').catch((err) => {
+                webChildCompilationList.push(childCompiler(getScriptRequire(this, request), context, filename, compilation, 'web').catch((err) => {
                     compilation.errors.push(prettyError(err, compiler.context).toString());
                     return {
                         content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
@@ -156,23 +158,16 @@ class HtmlResourceWebpackPlugin {
             } else {
                 self.assetJson = assetJson;
             }
-            Promise.all([].concat(childCompilation, webChildCompilationList)).then((values) => {
-                // console.log(values, 'values');
-                //console.log(webChildCompilationList.length)
-            }).catch((err) => {
-                console.log(err)
-            })
+
             Promise.all([].concat(childCompilation, webChildCompilationList))
                 .then(([childCompilationTemplate, ...depCompilationTemplate]) => {
                     console.log(depCompilationTemplate[0]);
-                    //console.log(childCompilationTemplate)
                     return this.evaluateCompilationResult(compilation, childCompilationTemplate)
                 })
                 .then((html) => {
                     return html;
                 })
                 .then((html) => {
-                    console.log(assets, 'assets')
                     let _html = this.matchRes(
                         html,
                         assets.chunks,
