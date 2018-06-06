@@ -62,7 +62,9 @@ class HtmlResourceWebpackPlugin {
 
     getDependenceResolver(lookupStartPath) {
         return this.reqList.map((item) => {
-            return this.resolver.getPath(lookupStartPath, item.value)
+            let request = this.resolver.getPath(lookupStartPath, item.value);
+            item.request = request;
+            return request;
         });
     }
 
@@ -74,6 +76,8 @@ class HtmlResourceWebpackPlugin {
         const script = this.options.script;
 
         const filename = this.options.filename;
+        const basename = path.basename(filename, '.html');
+
         let childCompilation = null;
         let webChildCompilation = null;
 
@@ -118,7 +122,7 @@ class HtmlResourceWebpackPlugin {
                     compilation.errors.push(prettyError(err, compiler.context).toString());
                     return {
                         content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
-                        outputName: 'filename'
+                        outputName: filename
                     };
                 }).then((compilationResult) => {
                     callback();
@@ -153,20 +157,22 @@ class HtmlResourceWebpackPlugin {
                 self.assetJson = assetJson;
             }
             Promise.all([].concat(childCompilation, webChildCompilationList)).then((values) => {
-                //console.log(values, 'values');
-                console.log(webChildCompilationList.length)
+                // console.log(values, 'values');
+                //console.log(webChildCompilationList.length)
             }).catch((err) => {
                 console.log(err)
             })
-            Promise.resolve()
-                .then(() => childCompilation)
-                .then((childCompilationTemplate) => {
+            Promise.all([].concat(childCompilation, webChildCompilationList))
+                .then(([childCompilationTemplate, ...depCompilationTemplate]) => {
+                    console.log(depCompilationTemplate[0]);
+                    //console.log(childCompilationTemplate)
                     return this.evaluateCompilationResult(compilation, childCompilationTemplate)
                 })
                 .then((html) => {
                     return html;
                 })
                 .then((html) => {
+                    console.log(assets, 'assets')
                     let _html = this.matchRes(
                         html,
                         assets.chunks,
@@ -192,7 +198,7 @@ class HtmlResourceWebpackPlugin {
             compiler.hooks.make.tapAsync('htmlResourcePlugin', makeHookCallback);
             //compiler.hooks.make.tapAsync('hemlResourceScriptPlugin', webMakeHookCallback);
             this.resolverList.forEach((item, index) => {
-                compiler.hooks.make.tapAsync(`scriptHtmlResourcePlugin${index}`,
+                compiler.hooks.make.tapAsync(`${basename}ScriptHtmlResourcePlugin${index}`,
                     getDependenceHookCallback(getScriptRequire(this, item), item))
             })
             compiler.hooks.emit.tapAsync('htmlResourcePlugin', makeEmitHookCallback);

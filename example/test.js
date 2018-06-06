@@ -1,7 +1,5 @@
-import './index.scss';
-
 function i() {
-
+    console.log('hello world')
 }
 
 i();

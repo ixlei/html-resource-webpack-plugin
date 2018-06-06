@@ -74,7 +74,7 @@ module.exports = {
         //     },
         //     allChunks: true
         // }),
-        //new webpack.optimize.ModuleConcatenationPlugin(),
+        new webpack.optimize.ModuleConcatenationPlugin(),
         // new CopyWebpackPlugin([{
         //     from: 'libs/',
         //     to: 'libs/[name].[hash:6].[ext]'

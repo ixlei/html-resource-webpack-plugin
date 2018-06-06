@@ -1,12 +1,8 @@
-// var webpack = require('html-res-loader');
+// var r = require('html-res-loader');
+// console.log(r)
 
-function i() {
-
+function name() {
+    console.log('--dsjdsjdjsjdjsj')
 }
 
-i();
-
-// export default function() {
-//     console.log({ name: 'dsds' });
-
-// }
+name();
