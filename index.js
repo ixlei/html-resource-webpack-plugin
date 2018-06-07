@@ -101,7 +101,9 @@ class HtmlResourceWebpackPlugin {
         this.resolverList = this.getDependenceResolver(lookupStartPath);
 
         let makeHookCallback = (compilation, callback) => {
-            childCompilation = childCompiler(getRequestPath(this, template), context, filename, compilation, 'node').catch((err) => {
+            childCompilation = childCompiler(getRequestPath(this, template, {
+                requestList: this.reqList
+            }), context, filename, compilation, 'node').catch((err) => {
                 compilation.errors.push(prettyError(err, compiler.context).toString());
                 return {
                     content: this.options.showErrors ? prettyError(err, compiler.context).toJsonHtml() : 'ERROR',
@@ -158,14 +160,14 @@ class HtmlResourceWebpackPlugin {
             } else {
                 self.assetJson = assetJson;
             }
-
+            let _depCompilationTemplate = [];
             Promise.all([].concat(childCompilation, webChildCompilationList))
                 .then(([childCompilationTemplate, ...depCompilationTemplate]) => {
-                    console.log(depCompilationTemplate[0]);
-                    return this.evaluateCompilationResult(compilation, childCompilationTemplate)
+                    _depCompilationTemplate = depCompilationTemplate;
+                    return this.evaluateCompilationResult(compilation, childCompilationTemplate);
                 })
                 .then((html) => {
-                    return html;
+                    return this.injectDepenResource(html, _depCompilationTemplate)
                 })
                 .then((html) => {
                     let _html = this.matchRes(
@@ -203,10 +205,17 @@ class HtmlResourceWebpackPlugin {
         }
     }
 
-    /**
-     * Evaluates the child compilation result
-     * Returns a promise
-     */
+    injectDepenResource(content, dependencies) {
+        let requestList = this.reqList;
+        console.log(content, dependencies);
+        return requestList.reduce((content, item, index) => {
+            let start = item.start + item.length;
+            let placeholderContent = JSON.stringify(`htmlWebpackPluginInline${start}`);
+            let placeholderRegexp = new RegExp(placeholderContent);
+            return content.replace(placeholderRegexp, dependencies[index]);
+        }, content);
+    }
+
     evaluateCompilationResult(compilation, source) {
         if (!source) {
             return Promise.reject('The child compilation didn\'t provide a result');
@@ -232,10 +241,7 @@ class HtmlResourceWebpackPlugin {
             Promise.reject('The loader "' + this.options.template + '" didn\'t return html.');
     }
 
-    /**
-     * Helper to return a sorted unique array of all asset files out of the
-     * asset object
-     */
+
     getAssetFiles(assets) {
         const files = _.uniq(Object.keys(assets).filter(assetType => assetType !== 'chunks' && assets[assetType]).reduce((files, assetType) => files.concat(assets[assetType]), []));
         files.sort();
