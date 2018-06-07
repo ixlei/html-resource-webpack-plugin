@@ -26,6 +26,7 @@
     "babel-loader": "^7.1.4",
     "enhanced-resolve": "^4.0.0",
     "fastparse": "^1.1.1",
+    "html-minifier": "^3.5.16",
     "html-res-loader": "0.0.2",
     "loader-utils": "^1.1.0",
     "lodash": "^4.17.5",

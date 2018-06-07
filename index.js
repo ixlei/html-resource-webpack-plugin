@@ -6,6 +6,7 @@ const _ = require('lodash');
 const path = require('path');
 const loaderUtils = require('loader-utils');
 const objectAssign = require('object-assign');
+const htmlMinifier = require('html-minifier');
 const prettyError = require('./lib/error.js');
 const childCompiler = require('./lib/compiler');
 const makeHelper = require('./lib/makeHelper');
@@ -26,6 +27,7 @@ class HtmlResourceWebpackPlugin {
             filename: 'index.html',
             reqAttr: ['script:data-src']
         }, options);
+
         this.webpackOptions = {};
         this.reqList = this.getReqList();
         this.resolver = null;
@@ -170,15 +172,19 @@ class HtmlResourceWebpackPlugin {
                     return this.injectDepenResource(html, _depCompilationTemplate)
                 })
                 .then((html) => {
-                    let _html = this.matchRes(
+                    return this.matchRes(
                         html,
                         assets.chunks,
                         assets.publicPath,
                         compilation.assets);
-
+                })
+                .then((html) => {
+                    return this.minifyHtml(html, this.options.minify)
+                })
+                .then((html) => {
                     compilation.assets[self.childCompilationOutputName] = {
-                        source: () => _html,
-                        size: () => _html.length
+                        source: () => html,
+                        size: () => html.length
                     };
                     callback();
                 })
@@ -207,7 +213,6 @@ class HtmlResourceWebpackPlugin {
 
     injectDepenResource(content, dependencies) {
         let requestList = this.reqList;
-        console.log(content, dependencies);
         return requestList.reduce((content, item, index) => {
             let start = item.start + item.length;
             let placeholderContent = JSON.stringify(`htmlWebpackPluginInline${start}`);
@@ -239,6 +244,19 @@ class HtmlResourceWebpackPlugin {
         return typeof newSource === 'string' || typeof newSource === 'function' ?
             Promise.resolve(newSource) :
             Promise.reject('The loader "' + this.options.template + '" didn\'t return html.');
+    }
+
+
+    minifyHtml(content, minimizeOptions) {
+        minimizeOptions = typeof minimizeOptions !== "undefined" ?
+            minimizeOptions : {
+                "minifyJS": true,
+                "minifyCSS": true,
+                "removeScriptTypeAttributes": true,
+                "removeStyleTypeAttributes": true
+            };
+
+        return content = htmlMinifier.minify(content, minimizeOptions);
     }
 
 
