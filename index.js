@@ -5,15 +5,17 @@ const fs = require('fs');
 const _ = require('lodash');
 const path = require('path');
 const loaderUtils = require('loader-utils');
+const resolveFrom = require('resolve-from');
 const objectAssign = require('object-assign');
 const htmlMinifier = require('html-minifier');
-const prettyError = require('./lib/error.js');
-const childCompiler = require('./lib/compiler');
-const makeHelper = require('./lib/makeHelper');
+
 const parser = require('./lib/parser');
+const prettyError = require('./lib/error.js');
+const makeHelper = require('./lib/makeHelper');
+const childCompiler = require('./lib/compiler');
 const RequireHelper = require('./lib/requireHelper');
 
-const resolveFrom = require('resolve-from');
+
 
 let constants = require('./lib/constants');
 
@@ -35,10 +37,9 @@ class HtmlResourceWebpackPlugin {
     }
 
     getReqList() {
-        const reqAttr = this.options.reqAttr;
-        const template = this.options.template;
+        const { reqAttr, template } = this.options;
 
-        this.content = fs.readFileSync(template, 'utf-8');
+        let content = fs.readFileSync(template, 'utf-8');
 
         function isNeedRequire(tag, name, _defaultTag = reqAttr) {
             return _defaultTag.some((item) => {
@@ -46,7 +47,7 @@ class HtmlResourceWebpackPlugin {
             });
         }
 
-        const res = parser(this.content, function(type, tag, name) {
+        const res = parser(content, function(type, tag, name) {
             if (type == constants.ATTR) {
                 return isNeedRequire(tag, name);
             }
@@ -162,6 +163,7 @@ class HtmlResourceWebpackPlugin {
             } else {
                 self.assetJson = assetJson;
             }
+
             let _depCompilationTemplate = [];
             Promise.all([].concat(childCompilation, webChildCompilationList))
                 .then(([childCompilationTemplate, ...depCompilationTemplate]) => {
