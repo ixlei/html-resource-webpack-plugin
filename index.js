@@ -203,6 +203,9 @@ class HtmlResourceWebpackPlugin {
                     outputName: this.childCompilationOutputName,
                     plugin: this
                 }))
+                .then(compilationResult => typeof compilationResult !== 'function' ?
+                    compilationResult :
+                    self.executeTemplate(compilationResult, chunks, assets, compilation))
                 .then((html) => {
                     return this.matchRes(
                         html,
@@ -212,6 +215,29 @@ class HtmlResourceWebpackPlugin {
                 })
                 .then((html) => {
                     return this.minifyHtml(html, this.options.minify)
+                })
+                .then(html => {
+                    const pluginArgs = { html: html, assets: assets, plugin: self, outputName: self.childCompilationOutputName };
+                    return applyPluginsAsyncWaterfall('html-webpack-plugin-before-html-processing', true, pluginArgs);
+                })
+                .then(result => {
+                    const html = result.html;
+                    const assets = result.assets;
+                    // Prepare script and link tags
+                    const assetTags = self.generateHtmlTags(assets);
+                    const pluginArgs = { head: assetTags.head, body: assetTags.body, plugin: self, chunks: chunks, outputName: self.childCompilationOutputName };
+                    // Allow plugins to change the assetTag definitions
+                    return applyPluginsAsyncWaterfall('html-webpack-plugin-alter-asset-tags', true, pluginArgs)
+                        .then(result => self.postProcessHtml(html, assets, { body: result.body, head: result.head })
+                            .then(html => _.extend(result, { html: html, assets: assets })));
+                })
+                // Allow plugins to change the html after assets are injected
+                .then(result => {
+                    const html = result.html;
+                    const assets = result.assets;
+                    const pluginArgs = { html: html, assets: assets, plugin: self, outputName: self.childCompilationOutputName };
+                    return applyPluginsAsyncWaterfall('html-webpack-plugin-after-html-processing', true, pluginArgs)
+                        .then(result => result.html);
                 })
                 .then((html) => {
                     compilation.assets[self.childCompilationOutputName] = {
@@ -265,6 +291,114 @@ class HtmlResourceWebpackPlugin {
         }, content);
     }
 
+    generateHtmlTags(assets) {
+        // Turn script files into script tags
+        const scripts = assets.js.map(scriptPath => ({
+            tagName: 'script',
+            closeTag: true,
+            attributes: {
+                type: 'text/javascript',
+                src: scriptPath
+            }
+        }));
+        // Make tags self-closing in case of xhtml
+        const selfClosingTag = !!this.options.xhtml;
+        // Turn css files into link tags
+        const styles = assets.css.map(stylePath => ({
+            tagName: 'link',
+            selfClosingTag: selfClosingTag,
+            voidTag: true,
+            attributes: {
+                href: stylePath,
+                rel: 'stylesheet'
+            }
+        }));
+        // Injection targets
+        let head = this.getMetaTags();
+        let body = [];
+
+        // If there is a favicon present, add it to the head
+        if (assets.favicon) {
+            head.push({
+                tagName: 'link',
+                selfClosingTag: selfClosingTag,
+                voidTag: true,
+                attributes: {
+                    rel: 'shortcut icon',
+                    href: assets.favicon
+                }
+            });
+        }
+        // Add styles to the head
+        head = head.concat(styles);
+        // Add scripts to body or head
+        if (this.options.inject === 'head') {
+            head = head.concat(scripts);
+        } else {
+            body = body.concat(scripts);
+        }
+        return { head: head, body: body };
+    }
+
+    postProcessHtml(html, assets, assetTags) {
+        if (typeof html !== 'string') {
+            return Promise.reject('Expected html to be a string but got ' + JSON.stringify(html));
+        }
+        return Promise.resolve()
+            // Inject
+            .then(() => {
+                if (this.options.inject) {
+                    return this.injectAssetsIntoHtml(html, assets, assetTags);
+                } else {
+                    return html;
+                }
+            })
+    }
+
+    injectAssetsIntoHtml(html, assets, assetTags) {
+        const htmlRegExp = /(<html[^>]*>)/i;
+        const headRegExp = /(<\/head\s*>)/i;
+        const bodyRegExp = /(<\/body\s*>)/i;
+        const body = assetTags.body.map(this.createHtmlTag.bind(this));
+        const head = assetTags.head.map(this.createHtmlTag.bind(this));
+
+        if (body.length) {
+            if (bodyRegExp.test(html)) {
+                // Append assets to body element
+                html = html.replace(bodyRegExp, match => body.join('') + match);
+            } else {
+                // Append scripts to the end of the file if no <body> element exists:
+                html += body.join('');
+            }
+        }
+
+        if (head.length) {
+            // Create a head tag if none exists
+            if (!headRegExp.test(html)) {
+                if (!htmlRegExp.test(html)) {
+                    html = '<head></head>' + html;
+                } else {
+                    html = html.replace(htmlRegExp, match => match + '<head></head>');
+                }
+            }
+
+            // Append assets to head element
+            html = html.replace(headRegExp, match => head.join('') + match);
+        }
+
+        // Inject manifest into the opening html tag
+        if (assets.manifest) {
+            html = html.replace(/(<html[^>]*)(>)/i, (match, start, end) => {
+                // Append the manifest only if no manifest was specified
+                if (/\smanifest\s*=/.test(match)) {
+                    return match;
+                }
+                return start + ' manifest="' + assets.manifest + '"' + end;
+            });
+        }
+        return html;
+    }
+
     evaluateCompilationResult(compilation, source) {
         if (!source) {
             return Promise.reject('The child compilation didn\'t provide a result');
@@ -301,6 +435,32 @@ class HtmlResourceWebpackPlugin {
             };
 
         return content = htmlMinifier.minify(content, minimizeOptions);
+    }
+
+    executeTemplate(templateFunction, chunks, assets, compilation) {
+        return Promise.resolve()
+            // Template processing
+            .then(() => {
+                const templateParams = this.getTemplateParameters(compilation, assets);
+                let html = '';
+                try {
+                    html = templateFunction(templateParams);
+                } catch (e) {
+                    compilation.errors.push(new Error('Template execution failed: ' + e));
+                    return Promise.reject(e);
+                }
+                return html;
+            });
+    }
+
+    getTemplateParameters(compilation, assets) {
+        if (typeof this.options.templateParameters === 'function') {
+            return this.options.templateParameters(compilation, assets, this.options);
+        }
+        if (typeof this.options.templateParameters === 'object') {
+            return this.options.templateParameters;
+        }
+        return {};
     }
 
 
@@ -580,7 +740,6 @@ class HtmlResourceWebpackPlugin {
             entry;
         //}
     }
-
 
 }
 
