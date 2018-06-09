@@ -29,6 +29,7 @@ class HtmlResourceWebpackPlugin {
             filename: 'index.html',
             reqAttr: ['script:data-src'],
             chunks: [],
+            meta: false,
             excludedChunks: []
         }, options);
 
@@ -198,14 +199,6 @@ class HtmlResourceWebpackPlugin {
                 .then((html) => {
                     return this.injectDepenResource(html, _depCompilationTemplate)
                 })
-                .then(compilationResult => applyPluginsAsyncWaterfall('html-webpack-plugin-before-html-generation', false, {
-                    assets: assets,
-                    outputName: this.childCompilationOutputName,
-                    plugin: this
-                }))
-                .then(compilationResult => typeof compilationResult !== 'function' ?
-                    compilationResult :
-                    self.executeTemplate(compilationResult, chunks, assets, compilation))
                 .then((html) => {
                     return this.matchRes(
                         html,
@@ -216,6 +209,15 @@ class HtmlResourceWebpackPlugin {
                 .then((html) => {
                     return this.minifyHtml(html, this.options.minify)
                 })
+                .then(compilationResult => applyPluginsAsyncWaterfall('html-webpack-plugin-before-html-generation', false, {
+                        assets: assets,
+                        outputName: self.childCompilationOutputName,
+                        plugin: self
+                    })
+                    .then(() => compilationResult))
+                .then(compilationResult => typeof compilationResult !== 'function' ?
+                    compilationResult :
+                    this.executeTemplate(compilationResult, chunks, assets, compilation))
                 .then(html => {
                     const pluginArgs = { html: html, assets: assets, plugin: self, outputName: self.childCompilationOutputName };
                     return applyPluginsAsyncWaterfall('html-webpack-plugin-before-html-processing', true, pluginArgs);
@@ -289,6 +291,33 @@ class HtmlResourceWebpackPlugin {
             let placeholderRegexp = new RegExp(placeholderContent);
             return content.replace(placeholderRegexp, dependencies[index]);
         }, content);
+    }
+
+    getMetaTags() {
+        if (this.options.meta === false) {
+            return [];
+        }
+        // Make tags self-closing in case of xhtml
+        // Turn { "viewport" : "width=500, initial-scale=1" } into
+        // [{ name:"viewport" content:"width=500, initial-scale=1" }]
+        const selfClosingTag = !!this.options.xhtml;
+        const metaTagAttributeObjects = Object.keys(this.options.meta).map((metaName) => {
+            const metaTagContent = this.options.meta[metaName];
+            return (typeof metaTagContent === 'object') ? metaTagContent : {
+                name: metaName,
+                content: metaTagContent
+            };
+        });
+        // Turn [{ name:"viewport" content:"width=500, initial-scale=1" }] into
+        // the html-webpack-plugin tag structure
+        return metaTagAttributeObjects.map((metaTagAttributes) => {
+            return {
+                tagName: 'meta',
+                voidTag: true,
+                selfClosingTag: selfClosingTag,
+                attributes: metaTagAttributes
+            };
+        });
     }
 
     generateHtmlTags(assets) {
