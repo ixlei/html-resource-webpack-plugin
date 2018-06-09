@@ -15,7 +15,7 @@ const makeHelper = require('./lib/makeHelper');
 const childCompiler = require('./lib/compiler');
 const RequireHelper = require('./lib/requireHelper');
 
-
+const trainCaseToCamelCase = makeHelper.trainCaseToCamelCase;
 
 let constants = require('./lib/constants');
 
@@ -27,7 +27,9 @@ class HtmlResourceWebpackPlugin {
         this.options = objectAssign({}, {
             template: path.resolve(__dirname, 'default-index.html'),
             filename: 'index.html',
-            reqAttr: ['script:data-src']
+            reqAttr: ['script:data-src'],
+            chunks: [],
+            excludedChunks: []
         }, options);
 
         this.webpackOptions = {};
@@ -87,6 +89,19 @@ class HtmlResourceWebpackPlugin {
         let webChildCompilationList = [];
 
         let isCompilationCached = false;
+
+        if (compiler.hooks) {
+            compiler.hooks.compilation.tap('HtmlWebpackPluginHooks', compilation => {
+                const SyncWaterfallHook = require('tapable').SyncWaterfallHook;
+                const AsyncSeriesWaterfallHook = require('tapable').AsyncSeriesWaterfallHook;
+                compilation.hooks.htmlWebpackPluginAlterChunks = new SyncWaterfallHook(['chunks', 'objectWithPluginRef']);
+                compilation.hooks.htmlWebpackPluginBeforeHtmlGeneration = new AsyncSeriesWaterfallHook(['pluginArgs']);
+                compilation.hooks.htmlWebpackPluginBeforeHtmlProcessing = new AsyncSeriesWaterfallHook(['pluginArgs']);
+                compilation.hooks.htmlWebpackPluginAlterAssetTags = new AsyncSeriesWaterfallHook(['pluginArgs']);
+                compilation.hooks.htmlWebpackPluginAfterHtmlProcessing = new AsyncSeriesWaterfallHook(['pluginArgs']);
+                compilation.hooks.htmlWebpackPluginAfterEmit = new AsyncSeriesWaterfallHook(['pluginArgs']);
+            });
+        }
 
         const helper = makeHelper(context);
         const getRequestPath = helper.getRequestPath;
@@ -155,13 +170,23 @@ class HtmlResourceWebpackPlugin {
                 version: false
             };
             const allChunks = compilation.getStats().toJson(chunkOnlyFilterConfig).chunks;
-            const assets = this.getAssets(compilation, allChunks);
+            let chunks = allChunks;
+
+            const assets = this.getAssets(compilation, chunks);
             // If the template and the assets did not change we don't have to emit the html
             const assetJson = JSON.stringify(this.getAssetFiles(assets));
             if (isCompilationCached && self.options.cache && assetJson === self.assetJson) {
                 return callback();
             } else {
                 self.assetJson = assetJson;
+            }
+
+            const applyPluginsAsyncWaterfall = this.applyPluginsAsyncWaterfall(compilation);
+
+            if (compilation.hooks) {
+                chunks = compilation.hooks.htmlWebpackPluginAlterChunks.call(chunks, { plugin: this });
+            } else {
+                chunks = compilation.applyPluginsWaterfall('html-webpack-plugin-alter-chunks', chunks, { plugin: this });
             }
 
             let _depCompilationTemplate = [];
@@ -173,6 +198,11 @@ class HtmlResourceWebpackPlugin {
                 .then((html) => {
                     return this.injectDepenResource(html, _depCompilationTemplate)
                 })
+                .then(compilationResult => applyPluginsAsyncWaterfall('html-webpack-plugin-before-html-generation', false, {
+                    assets: assets,
+                    outputName: this.childCompilationOutputName,
+                    plugin: this
+                }))
                 .then((html) => {
                     return this.matchRes(
                         html,
@@ -190,11 +220,19 @@ class HtmlResourceWebpackPlugin {
                     };
                     callback();
                 })
+                .then(() => applyPluginsAsyncWaterfall('html-webpack-plugin-after-emit', false, {
+                    html: compilation.assets[self.childCompilationOutputName],
+                    outputName: self.childCompilationOutputName,
+                    plugin: this
+                }))
                 .catch((err) => {
                     compilation.errors.push(prettyError(err, compiler.context).toString());
                     // Prevent caching
                     this.hash = null;
                     return this.options.showErrors ? prettyError(err, compiler.context).toHtml() : 'ERROR';
+                }).then(() => null)
+                .then(() => {
+                    callback();
                 })
 
         }
@@ -209,6 +247,10 @@ class HtmlResourceWebpackPlugin {
             compiler.hooks.emit.tapAsync('htmlResourcePlugin', makeEmitHookCallback);
         } else {
             compiler.plugin('make', makeHookCallback);
+            this.resolverList.forEach((item, index) => {
+                compiler.plugin('make',
+                    getDependenceHookCallback(getScriptRequire(this, item), item))
+            })
             compiler.plugin('emit', makeEmitHookCallback);
         }
     }
@@ -349,6 +391,68 @@ class HtmlResourceWebpackPlugin {
             }
         })
         return assets;
+    }
+
+    applyPluginsAsyncWaterfall(compilation) {
+        if (compilation.hooks) {
+            return (eventName, requiresResult, pluginArgs) => {
+                const ccEventName = trainCaseToCamelCase(eventName);
+                if (!compilation.hooks[ccEventName]) {
+                    compilation.errors.push(
+                        new Error('No hook found for ' + eventName)
+                    );
+                }
+
+                return compilation.hooks[ccEventName].promise(pluginArgs);
+            };
+        }
+
+        const promisedApplyPluginsAsyncWaterfall = function(name, init) {
+            return new Promise((resolve, reject) => {
+                const callback = function(err, result) {
+                    if (err) {
+                        return reject(err);
+                    }
+                    resolve(result);
+                };
+                compilation.applyPluginsAsyncWaterfall(name, init, callback);
+            });
+        };
+
+        return (eventName, requiresResult, pluginArgs) => promisedApplyPluginsAsyncWaterfall(eventName, pluginArgs)
+            .then(result => {
+                if (requiresResult && !result) {
+                    compilation.warnings.push(
+                        new Error('Using ' + eventName + ' without returning a result is deprecated.')
+                    );
+                }
+                return _.extend(pluginArgs, result);
+            });
+    }
+
+
+    filterChunks(chunks, includedChunks, excludedChunks) {
+        return chunks.filter(chunk => {
+            const chunkName = chunk.names[0];
+            if (chunkName === undefined) {
+                return false;
+            }
+            // Skip if the chunk should be lazy loaded, example require.ensure
+            if (typeof chunk.isInitial === 'function') {
+                if (!chunk.isInitial()) {
+                    return false;
+                }
+            } else if (!chunk.initial) {
+                return false;
+            }
+            if (Array.isArray(includedChunks) && includedChunks.indexOf(chunkName) === -1) {
+                return false;
+            }
+            if (Array.isArray(excludedChunks) && excludedChunks.indexOf(chunkName) !== -1) {
+                return false;
+            }
+            return true;
+        });
     }
 
     matchRes(html, chunks, publicPath, assets) {
