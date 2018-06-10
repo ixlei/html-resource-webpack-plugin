@@ -174,7 +174,7 @@ class HtmlResourceWebpackPlugin {
             let chunks = this.filterChunks(allChunks,
                 this.options.chunks,
                 this.options.excludedChunks);
-
+            const allAssets = this.getAssets(compilation, allChunks);
             const assets = this.getAssets(compilation, chunks);
             // If the template and the assets did not change we don't have to emit the html
             const assetJson = JSON.stringify(this.getAssetFiles(assets));
@@ -204,8 +204,8 @@ class HtmlResourceWebpackPlugin {
                 .then((html) => {
                     return this.matchRes(
                         html,
-                        allChunks.chunks,
-                        allChunks.publicPath,
+                        allAssets.chunks,
+                        allAssets.publicPath,
                         compilation.assets);
                 })
                 .then((html) => {
