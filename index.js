@@ -248,7 +248,6 @@ class HtmlResourceWebpackPlugin {
                         source: () => html,
                         size: () => html.length
                     };
-                    callback();
                 })
                 .then(() => applyPluginsAsyncWaterfall('html-webpack-plugin-after-emit', false, {
                     html: compilation.assets[self.childCompilationOutputName],
@@ -384,6 +383,23 @@ class HtmlResourceWebpackPlugin {
                     return html;
                 }
             })
+    }
+
+    createHtmlTag(tagDefinition) {
+        const attributes = Object.keys(tagDefinition.attributes || {})
+            .filter(attributeName => tagDefinition.attributes[attributeName] !== false)
+            .map(attributeName => {
+                if (tagDefinition.attributes[attributeName] === true) {
+                    return attributeName;
+                }
+                return attributeName + '="' + tagDefinition.attributes[attributeName] + '"';
+            });
+        // Backport of 3.x void tag definition
+        const voidTag = tagDefinition.voidTag !== undefined ? tagDefinition.voidTag : !tagDefinition.closeTag;
+        const selfClosingTag = tagDefinition.voidTag !== undefined ? tagDefinition.voidTag && this.options.xhtml : tagDefinition.selfClosingTag;
+        return '<' + [tagDefinition.tagName].concat(attributes).join(' ') + (selfClosingTag ? '/' : '') + '>' +
+            (tagDefinition.innerHTML || '') +
+            (voidTag ? '' : '</' + tagDefinition.tagName + '>');
     }
 
     injectAssetsIntoHtml(html, assets, assetTags) {
