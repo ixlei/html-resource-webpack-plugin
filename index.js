@@ -772,7 +772,7 @@ class HtmlResourceWebpackPlugin {
             } else if (type == constants.STYLE) {
                 let styles = assets[outputPath].children || [];
                 return '<style>' + styles.map((item) => {
-                    return item.source();
+                    return item._value || item.source && item.source();
                 }).join('') + '</style>';
             }
         }
