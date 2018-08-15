@@ -410,27 +410,37 @@ class HtmlResourceWebpackPlugin {
         const head = assetTags.head.map(this.createHtmlTag.bind(this));
 
         if (body.length) {
-            if (bodyRegExp.test(html)) {
-                // Append assets to body element
-                html = html.replace(bodyRegExp, match => body.join('') + match);
+            if (this.options.injectAssetsTagIntoHtml) {
+                html = this.options.injectAssetsTagIntoHtml('body', html, body);
             } else {
-                // Append scripts to the end of the file if no <body> element exists:
-                html += body.join('');
-            }
-        }
-
-        if (head.length) {
-            // Create a head tag if none exists
-            if (!headRegExp.test(html)) {
-                if (!htmlRegExp.test(html)) {
-                    html = '<head></head>' + html;
+                if (bodyRegExp.test(html)) {
+                    // Append assets to body element
+                    html = html.replace(bodyRegExp, match => body.join('') + match);
                 } else {
-                    html = html.replace(htmlRegExp, match => match + '<head></head>');
+                    // Append scripts to the end of the file if no <body> element exists:
+                    html += body.join('');
                 }
             }
 
-            // Append assets to head element
-            html = html.replace(headRegExp, match => head.join('') + match);
+        }
+
+        if (head.length) {
+            if (this.options.injectAssetsTagIntoHtml) {
+                html = this.options.injectAssetsTagIntoHtml('head', html, head);
+            } else {
+                // Create a head tag if none exists
+                if (!headRegExp.test(html)) {
+                    if (!htmlRegExp.test(html)) {
+                        html = '<head></head>' + html;
+                    } else {
+                        html = html.replace(htmlRegExp, match => match + '<head></head>');
+                    }
+                }
+
+                // Append assets to head element
+                html = html.replace(headRegExp, match => head.join('') + match);
+            }
+
         }
 
         // Inject manifest into the opening html tag

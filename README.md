@@ -61,6 +61,7 @@ Allowed values are as follows
 |**[`template`](#)**|`{String}`|``|`webpack` require path to the template. generate the html|
 |**[`getPath`](#)**|`{Function}`||change the html refer js or css href|
 |**[`beforeHtmlEmit`](#)**|`{Function}`||last change the output html, you can inject resource etc|
+|**[`injectAssetsTagIntoHtml`](#)**|`{Function}`||you can inject assets into html by this function|
 
 Here's an example webpack config illustrating how to use these options
 
