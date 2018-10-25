@@ -96,6 +96,7 @@ class HtmlResourceWebpackPlugin {
                 const SyncWaterfallHook = require('tapable').SyncWaterfallHook;
                 const AsyncSeriesWaterfallHook = require('tapable').AsyncSeriesWaterfallHook;
                 compilation.hooks.htmlWebpackPluginAlterChunks = new SyncWaterfallHook(['chunks', 'objectWithPluginRef']);
+                compilation.hooks.htmlWebpackPluginBeforeHandleInlineResource = new AsyncSeriesWaterfallHook(['html']);
                 compilation.hooks.htmlWebpackPluginBeforeHtmlGeneration = new AsyncSeriesWaterfallHook(['pluginArgs']);
                 compilation.hooks.htmlWebpackPluginBeforeHtmlProcessing = new AsyncSeriesWaterfallHook(['pluginArgs']);
                 compilation.hooks.htmlWebpackPluginAlterAssetTags = new AsyncSeriesWaterfallHook(['pluginArgs']);
@@ -200,6 +201,12 @@ class HtmlResourceWebpackPlugin {
                 })
                 .then((html) => {
                     return this.injectDepenResource(html, _depCompilationTemplate)
+                })
+                .then((html) => {
+                    return applyPluginsAsyncWaterfall('html-webpack-plugin-before-handle-inline-resource', true, {
+                        html,
+                        filename: this.options.filename
+                    })
                 })
                 .then((html) => {
                     return this.matchRes(
