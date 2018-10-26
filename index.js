@@ -787,7 +787,7 @@ class HtmlResourceWebpackPlugin {
                     assets[outputPath].source() +
                     '</script>';
             } else if (type == constants.STYLE) {
-                let styles = assets[outputPath].children || [];
+                let styles = assets[outputPath].children || assets[outputPath]._source.children || [];
                 return '<style>' + styles.map((item) => {
                     return item._value || item.source && item.source();
                 }).join('') + '</style>';
